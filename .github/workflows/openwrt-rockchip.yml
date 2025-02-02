@@ -6,7 +6,7 @@
 # Blog: https://p3terx.com
 #=================================================
 
-name: NanoPi-R5S-R5C-6.x-精简版
+name: openwrt-rockchip
 
 on:
   repository_dispatch:
@@ -19,10 +19,9 @@ on:
 env:
   REPO_URL: https://github.com/DHDAXCW/lede-rockchip
   REPO_BRANCH: stable
-  CONFIG_FILE: configs/lean/simplify.config
-  DIY_SH: scripts/simplify.sh
+  CONFIG_FILE: configs/lede/full.config
+  DIY_SH: scripts/lede.sh
   KMODS_IN_FIRMWARE: true
-  UPLOAD_WETRANSFER: false #上传到WeTransfer
   UPLOAD_RELEASE: true
   TZ: Asia/Shanghai
 
@@ -39,13 +38,27 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
+    - name: Initialization Environment
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        echo -e "Total CPU cores\t: $(nproc)"
+        cat /proc/cpuinfo | grep 'model name'
+        free -h
+        uname -a
+        [ -f /proc/version ] && cat /proc/version
+        [ -f /etc/issue.net ] && cat /etc/issue.net
+        [ -f /etc/issue ] && cat /etc/issue
+        ulimit -a
+        
     - name: Clone Source Code
       run: |
         df -hT $PWD
         git clone $REPO_URL -b $REPO_BRANCH openwrt
-
+        cd openwrt
+        
     - name: Update Feeds
       id: update
       run: |
@@ -57,12 +70,11 @@ jobs:
         git clone --depth=1 https://github.com/DHDAXCW/luci customfeeds/luci
         chmod +x ../scripts/*.sh
         ../scripts/hook-feeds.sh
-          
     - name: Install Feeds
       run: |
         cd $OPENWRTROOT
         ./scripts/feeds install -a
-
+        
     - name: Load Custom Configuration
       run: |
         [ -e files ] && mv files $OPENWRTROOT/files
@@ -70,15 +82,16 @@ jobs:
         chmod +x scripts/*.sh
         cd $OPENWRTROOT
         ../$DIY_SH
-        ../scripts/preset-clash-core.sh amd64
+        ../scripts/preset-clash-core.sh arm64
         ../scripts/preset-terminal-tools.sh
         make defconfig
-          
+        
     - name: Download Package
       id: package
       run: |
         cd $OPENWRTROOT
         cat .config
+        make download -j50
         make download -j8
         find dl -size -1024c -exec ls -l {} \;
         find dl -size -1024c -exec rm -f {} \;
@@ -138,54 +151,51 @@ jobs:
         make package/install -j$(nproc) || make package/install -j1 V=s
         make target/install -j$(nproc) || make target/install -j1 V=s
         pushd bin/targets/rockchip/armv8
-        kernelv=`cat openwrt-rockchip-armv8.manifest | grep 'kernel - ' |  awk -F '[- ]' '{print $4}'`
-        echo "kernel_version=$kernelv" >> $GITHUB_OUTPUT
-        rm -rf openwrt-rockchip-armv8.manifest
-        rm -rf openwrt-rockchip-armv8-rootfs.tar.gz
-        rm -rf config.buildinfo
-        rm -rf packages-server.zip
-        mv openwrt-rockchip-armv8-friendlyarm_nanopi-r5s-ext4-sysupgrade.img.gz simplify-friendlyarm_nanopi-r5s-ext4-sysupgrade.img.gz 
-        mv openwrt-rockchip-armv8-friendlyarm_nanopi-r5c-ext4-sysupgrade.img.gz simplify-friendlyarm_nanopi-r5c-ext4-sysupgrade.img.gz 
-        mv openwrt-rockchip-armv8-friendlyarm_nanopi-r5s-squashfs-sysupgrade.img.gz simplify-friendlyarm_nanopi-r5s-squashfs-sysupgrade.img.gz
-        mv openwrt-rockchip-armv8-friendlyarm_nanopi-r5c-squashfs-sysupgrade.img.gz simplify-friendlyarm_nanopi-r5c-squashfs-sysupgrade.img.gz
+        rm -rf *ext4* *.manifest packages *.json *.buildinfo
+        mv openwrt-rockchip-armv8-embedfire_doornet1-squashfs-sysupgrade.img.gz $(date +"%Y.%m.%d")-openwrt-embedfire_doornet1-squashfs-sysupgrade.img.gz
+        mv openwrt-rockchip-armv8-embedfire_doornet2-squashfs-sysupgrade.img.gz $(date +"%Y.%m.%d")-openwrt-embedfire_doornet2-squashfs-sysupgrade.img.gz
+        mv openwrt-rockchip-armv8-embedfire_lubancat-1n-squashfs-sysupgrade.img.gz $(date +"%Y.%m.%d")-openwrt-embedfire_lubancat-1n-squashfs-sysupgrade.img.gz
+        mv openwrt-rockchip-armv8-embedfire_lubancat-1-squashfs-sysupgrade.img.gz $(date +"%Y.%m.%d")-openwrt-embedfire_lubancat-1-squashfs-sysupgrade.img.gz
+        mv openwrt-rockchip-armv8-embedfire_lubancat-2n-squashfs-sysupgrade.img.gz $(date +"%Y.%m.%d")-openwrt-embedfire_lubancat-2n-squashfs-sysupgrade.img.gz
+        mv openwrt-rockchip-armv8-embedfire_lubancat-2-squashfs-sysupgrade.img.gz $(date +"%Y.%m.%d")-openwrt-embedfire_lubancat-2-squashfs-sysupgrade.img.gz
+        mv openwrt-rockchip-armv8-embedfire_lubancat-4-squashfs-sysupgrade.img.gz $(date +"%Y.%m.%d")-openwrt-embedfire_lubancat-4-squashfs-sysupgrade.img.gz
+        mv openwrt-rockchip-armv8-embedfire_lubancat-5-squashfs-sysupgrade.img.gz $(date +"%Y.%m.%d")-openwrt-embedfire_lubancat-5-squashfs-sysupgrade.img.gz
+        mv openwrt-rockchip-armv8-friendlyarm_nanopc-t6-squashfs-sysupgrade.img.gz $(date +"%Y.%m.%d")-openwrt-friendlyarm_nanopc-t6-squashfs-sysupgrade.img.gz
+        mv openwrt-rockchip-armv8-friendlyarm_nanopi-r2c-squashfs-sysupgrade.img.gz $(date +"%Y.%m.%d")-openwrt-friendlyarm_nanopi-r2c-squashfs-sysupgrade.img.gz
+        mv openwrt-rockchip-armv8-friendlyarm_nanopi-r2s-squashfs-sysupgrade.img.gz $(date +"%Y.%m.%d")-openwrt-friendlyarm_nanopi-r2s-squashfs-sysupgrade.img.gz
+        mv openwrt-rockchip-armv8-friendlyarm_nanopi-r3s-squashfs-sysupgrade.img.gz $(date +"%Y.%m.%d")-openwrt-friendlyarm_nanopi-r3s-squashfs-sysupgrade.img.gz
+        mv openwrt-rockchip-armv8-friendlyarm_nanopi-r4se-squashfs-sysupgrade.img.gz $(date +"%Y.%m.%d")-openwrt-friendlyarm_nanopi-r4se-squashfs-sysupgrade.img.gz
+        mv openwrt-rockchip-armv8-friendlyarm_nanopi-r4s-squashfs-sysupgrade.img.gz $(date +"%Y.%m.%d")-openwrt-friendlyarm_nanopi-r4s-squashfs-sysupgrade.img.gz
+        mv openwrt-rockchip-armv8-friendlyarm_nanopi-r5c-squashfs-sysupgrade.img.gz $(date +"%Y.%m.%d")-openwrt-friendlyarm_nanopi-r5c-squashfs-sysupgrade.img.gz
+        mv openwrt-rockchip-armv8-friendlyarm_nanopi-r5s-squashfs-sysupgrade.img.gz $(date +"%Y.%m.%d")-openwrt-friendlyarm_nanopi-r5s-squashfs-sysupgrade.img.gz
+        mv openwrt-rockchip-armv8-friendlyarm_nanopi-r6c-squashfs-sysupgrade.img.gz $(date +"%Y.%m.%d")-openwrt-friendlyarm_nanopi-r6c-squashfs-sysupgrade.img.gz
+        mv openwrt-rockchip-armv8-friendlyarm_nanopi-r6s-squashfs-sysupgrade.img.gz $(date +"%Y.%m.%d")-openwrt-friendlyarm_nanopi-r6s-squashfs-sysupgrade.img.gz
+        mv openwrt-rockchip-armv8-hinlink_h88k-squashfs-sysupgrade.img.gz $(date +"%Y.%m.%d")-openwrt-hinlink_h88k-squashfs-sysupgrade.img.gz
+        mv openwrt-rockchip-armv8-hinlink_opc-h66k-squashfs-sysupgrade.img.gz $(date +"%Y.%m.%d")-openwrt-hinlink_opc-h66k-squashfs-sysupgrade.img.gz
+        mv openwrt-rockchip-armv8-hinlink_opc-h68k-squashfs-sysupgrade.img.gz $(date +"%Y.%m.%d")-openwrt-hinlink_opc-h68k-squashfs-sysupgrade.img.gz
+        mv openwrt-rockchip-armv8-hinlink_opc-h69k-squashfs-sysupgrade.img.gz $(date +"%Y.%m.%d")-openwrt-hinlink_opc-h69k-squashfs-sysupgrade.img.gz
         popd
         make checksum
-        mv bin/targets/rockchip/armv8/sha256sums bin/targets/rockchip/armv8/simplify-sha256sums
+        mv bin/targets/rockchip/armv8/sha256sums bin/targets/rockchip/armv8/full-sha256sums
         echo "GENERATE_STATUS=success" >> $GITHUB_OUTPUT
-
-    - name: Upload firmware to WeTransfer
-      id: wetransfer
-      if: steps.generate.outputs.GENERATE_STATUS == 'success' && env.UPLOAD_WETRANSFER == 'true' && !cancelled() && !failure()
-      run: |
-        curl -fsSL git.io/file-transfer | sh
-        ./transfer wet -s -p 16 --no-progress ${FIRMWARE} 2>&1 | tee wetransfer.log
-        echo "::warning file=wetransfer.com::$(cat wetransfer.log | grep https)"
-        echo "::set-output name=url::$(cat wetransfer.log | grep https | cut -f3 -d" ")"
-
+        
     - name: Generate release tag
       id: tag
       if: env.UPLOAD_RELEASE == 'true' && !cancelled()
       run: |
-          echo "release_tag=$(date +"%Y.%m.%d")-Lean" >> $GITHUB_OUTPUT
+          echo "release_tag=$(date +"%Y.%m.%d")-rockchip" >> $GITHUB_OUTPUT
           echo "release_date=$(date +"%Y.%m.%d")" >> $GITHUB_OUTPUT
           touch release.txt
-          echo "## 🗒️ 固件信息" >> release.txt
-          [ $UPLOAD_WETRANSFER = true ] && echo "- 🚀 [点我快速下载](${{ steps.wetransfer.outputs.url }})" >> release.txt
-          echo "
-          - 🔗 后台地址：192.168.10.1
-          - 🔑 后台密码：password
-          ## 🍻 固件类型
-          - 完整版：full
-          - 精简版：simplify" >> release.txt
+          echo "后台地址：192.168.11.1" >> release.txt
           echo "status=success" >> $GITHUB_OUTPUT
           
     - name: Upload firmware to release
-      uses: softprops/action-gh-release@v1
-      if: steps.tag.outputs.status == 'success' && !cancelled() && !failure()
+      uses: softprops/action-gh-release@v2
+      if: steps.tag.outputs.status == 'success' && !cancelled()
       env:
-          GITHUB_TOKEN: ${{ secrets.REPO_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-          name: 📦‍ 固件下载 | NanoPi-R5S-R5C-linux-${{ steps.generate.outputs.kernel_version }} | ${{ steps.tag.outputs.release_date }}
+          name: ${{ steps.tag.outputs.release_date }} openwrt-rockchip-armv8 下载固件
           tag_name: ${{ steps.tag.outputs.release_tag }}
           body_path: release.txt
           files: ${{ env.FIRMWARE }}/*
@@ -197,16 +207,16 @@ jobs:
           keep_minimum_runs: 1
 
     - name: Remove old Releases
-      uses: dev-drprasad/delete-older-releases@v0.2.1
+      uses: dev-drprasad/delete-older-releases@v0.3.3
       if: env.UPLOAD_RELEASE == 'true' && !cancelled()
       with:
-          keep_latest: 5
+          keep_latest: 20
           delete_tags: true
       env:
-          GITHUB_TOKEN: ${{ secrets.REPO_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Delete Artifacts
-      uses: geekyeggo/delete-artifact@v2
+      uses: geekyeggo/delete-artifact@v4
       with:
          name: |
             bin-archive
